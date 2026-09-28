@@ -89,6 +89,7 @@ impl RegistryContract {
     /// ```
     pub fn register_issuer(env: Env, address: Address, metadata: Map<String, String>) -> bool {
         Self::require_initialized(&env);
+        Self::require_not_paused(&env);
         Self::validate_metadata(&env, &metadata);
         address.require_auth();
         if env
@@ -116,6 +117,7 @@ impl RegistryContract {
         env: Env,
         entries: Vec<(Address, Map<String, String>)>,
     ) -> Vec<Address> {
+        Self::require_not_paused(&env);
         if entries.len() > 50 {
             panic_with_error!(&env, RegistryError::BatchSizeExceeded);
         }
@@ -186,6 +188,7 @@ impl RegistryContract {
         env: Env,
         entries: Vec<(Address, Map<String, String>)>,
     ) -> Vec<Address> {
+        Self::require_not_paused(&env);
         if entries.len() > 50 {
             panic_with_error!(&env, RegistryError::BatchSizeExceeded);
         }
@@ -256,6 +259,7 @@ impl RegistryContract {
     /// ```
     pub fn register_buyer(env: Env, address: Address, metadata: Map<String, String>) -> bool {
         Self::require_initialized(&env);
+        Self::require_not_paused(&env);
         Self::validate_metadata(&env, &metadata);
         address.require_auth();
         if env
@@ -307,6 +311,7 @@ impl RegistryContract {
     /// let ok = client.update_profile(&issuer, &new_metadata);
     /// ```
     pub fn update_profile(env: Env, address: Address, metadata: Map<String, String>) -> bool {
+        Self::require_not_paused(&env);
         Self::validate_metadata(&env, &metadata);
         address.require_auth();
         let key = DataKey::Profile(address.clone());
@@ -347,6 +352,7 @@ impl RegistryContract {
     /// let result = client.update_metadata(&issuer, &new_metadata);
     /// ```
     pub fn update_metadata(env: Env, address: Address, metadata: Map<String, String>) -> bool {
+        Self::require_not_paused(&env);
         Self::validate_metadata(&env, &metadata);
         address.require_auth();
         let key = DataKey::Profile(address.clone());
@@ -478,6 +484,7 @@ impl RegistryContract {
     /// let result = client.revoke(&issuer);
     /// ```
     pub fn revoke(env: Env, address: Address) -> bool {
+        Self::require_not_paused(&env);
         let admin = Self::require_admin(&env);
         admin.require_auth();
         let key = DataKey::Profile(address.clone());
@@ -529,6 +536,7 @@ impl RegistryContract {
     /// let ok = client.reinstate(&issuer);
     /// ```
     pub fn reinstate(env: Env, address: Address) -> bool {
+        Self::require_not_paused(&env);
         let admin = Self::require_admin(&env);
         admin.require_auth();
         let key = DataKey::Profile(address.clone());
@@ -549,6 +557,7 @@ impl RegistryContract {
     }
 
     pub fn verify_profile(env: Env, address: Address, verify: bool) -> bool {
+        Self::require_not_paused(&env);
         let admin = Self::require_admin(&env);
         admin.require_auth();
         let key = DataKey::Profile(address.clone());
@@ -586,6 +595,7 @@ impl RegistryContract {
     /// # Panics
     /// * `RegistryError::NotInitialized` if the contract has not been initialized.
     pub fn transfer_ownership(env: Env, new_admin: Address) {
+        Self::require_not_paused(&env);
         let admin = Self::require_admin(&env);
         admin.require_auth();
         new_admin.require_auth();
@@ -625,11 +635,32 @@ impl RegistryContract {
     /// client.transfer_admin(&new_admin);
     /// ```
     pub fn transfer_admin(env: Env, new_admin: Address) {
+        Self::require_not_paused(&env);
         let admin = Self::require_admin(&env);
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &new_admin);
         events::admin_transferred(&env, &admin, &new_admin);
         Self::extend_instance_ttl(&env);
+    }
+
+    pub fn pause(env: Env) {
+        let admin = Self::require_admin(&env);
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Paused, &true);
+        events::paused(&env, &admin);
+        Self::extend_instance_ttl(&env);
+    }
+
+    pub fn unpause(env: Env) {
+        let admin = Self::require_admin(&env);
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Paused, &false);
+        events::unpaused(&env, &admin);
+        Self::extend_instance_ttl(&env);
+    }
+
+    pub fn is_paused(env: Env) -> bool {
+        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
     }
 
     /// Returns the stored contract admin address.
@@ -678,6 +709,12 @@ impl RegistryContract {
 
     fn require_initialized(env: &Env) {
         if !env.storage().instance().has(&DataKey::Admin) {
+            panic_with_error!(env, RegistryError::NotInitialized);
+        }
+    }
+
+    fn require_not_paused(env: &Env) {
+        if env.storage().instance().get(&DataKey::Paused).unwrap_or(false) {
             panic_with_error!(env, RegistryError::NotInitialized);
         }
     }

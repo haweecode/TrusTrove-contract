@@ -81,5 +81,6 @@ impl Profile {
 #[contracttype]
 pub enum DataKey {
     Admin,
+    Paused,
     Profile(Address),
 }
