@@ -1196,7 +1196,11 @@ impl PoolContract {
         if !env.storage().persistent().has(&funded_key) {
             panic_with_error!(&env, PoolError::InvoiceNotFound);
         }
-        let funded_amount: u128 = env.storage().persistent().get(&funded_key).unwrap();
+        let funded_amount: u128 = env
+            .storage()
+            .persistent()
+            .get(&funded_key)
+            .unwrap_or_else(|| panic_with_error!(&env, PoolError::InvoiceNotFound));
 
         let escrow_contract =
             Self::escrow_contract(&env).expect("pool is not initialized: escrow contract missing");
@@ -1456,6 +1460,23 @@ impl PoolContract {
     pub fn get_utilization_rate(env: Env) -> u32 {
         let totals = Self::totals(&env);
         Self::utilization_bps_or_panic(&env, totals.funded, totals.deposits)
+    }
+
+    /// Returns a suggested invoice discount rate based on the pool's current
+    /// utilization. The function is read-only and intentionally non-authoritative:
+    /// it provides an issuer-side hint, without changing existing financing or
+    /// listing logic.
+    pub fn get_suggested_discount_bps(env: Env) -> u32 {
+        let utilization = Self::get_utilization_rate(env.clone());
+        let floor = MIN_SUGGESTED_DISCOUNT_BPS;
+        let ceiling = MAX_SUGGESTED_DISCOUNT_BPS;
+        if utilization >= 10_000 {
+            return ceiling;
+        }
+        let delta = ceiling.saturating_sub(floor) as u128;
+        let scaled = (utilization as u128).saturating_mul(delta);
+        let suggested = floor as u128 + (scaled / 10_000);
+        suggested as u32
     }
 
     /// Updates the pool's maximum utilization cap.

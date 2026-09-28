@@ -21,6 +21,15 @@ pub use trusttrove_ttl::THRESHOLD as TTL_THRESHOLD;
 /// `initialize` rather than rely on this default.
 pub const DEFAULT_MIN_INITIAL_DEPOSIT: u128 = 10_000_000;
 
+/// Suggested-discount floor used by `get_suggested_discount_bps()` when pool
+/// utilization is low. This mirrors the historical default around 2% and keeps
+/// the first step conservative before utilization pushes the rate upward.
+pub const MIN_SUGGESTED_DISCOUNT_BPS: u32 = 200;
+
+/// Suggested-discount ceiling used by `get_suggested_discount_bps()`. This is
+/// intentionally aligned with `InvoiceError::DiscountTooHigh`'s 5000 bps cap.
+pub const MAX_SUGGESTED_DISCOUNT_BPS: u32 = 5000;
+
 /// Maximum protocol fee in basis points (2000 bps = 20%).
 /// Prevents excessive fee extraction by capping the protocol cut at 20% of yield spread,
 /// mirroring the bounds-check pattern used by `list_for_financing`'s discount cap.
